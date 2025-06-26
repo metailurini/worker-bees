@@ -1,0 +1,283 @@
+# This code is inspired by the GitHub repository 'aider-github-workflows' by mirrajabi.
+# Reference: https://github.com/mirrajabi/aider-github-workflows
+
+name: Issue to PR workflow
+on:
+  workflow_call:
+    inputs:
+      base-branch:
+        description: 'Base branch to create PR against'
+        required: true
+        type: string
+      chat-timeout:
+        description: 'Timeout for chat in minutes to prevent burning your credits'
+        required: false
+        type: number
+        default: 10
+      issue-number:
+        description: 'Issue number'
+        required: true
+        type: number
+      model:
+        description: 'Model to use'
+        required: false
+        type: string
+        default: 'gemini/gemini-2.5-flash-preview-04-17'
+      api_key_env_name:
+        description: 'Name of the environment variable for the API key'
+        required: true
+        type: string
+    secrets:
+      api_key_env_value:
+        description: 'API key value for the specified provider'
+        required: true
+
+jobs:
+  create-pull-request:
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base-branch }}
+
+      - name: Create a new branch
+        uses: actions/github-script@v7
+        id: create_branch
+        with:
+          script: |
+            const kebabCase = (str) => str.toLowerCase().replace(/\s+/g, '-');
+
+            const fixBranchUrl = (url) => url
+              .replace(/\/git\/commits/, '/commit')
+              .replace(/api.github.com\/repos/, 'github.com');
+
+            const baseBranch = await github.rest.repos.getBranch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              branch: '${{ inputs.base-branch }}'
+            });
+
+            const { repo, owner } = context.repo;
+            let branchName = 'feature/aider-' + kebabCase(context.payload.issue.title || 'issue-${{ inputs.issue-number }}');
+            let refName = `refs/heads/${branchName}`
+            let refShortName = `heads/${branchName}`
+
+            let counter = 1;
+            let currentBranchBaseName = branchName;
+
+            while (true) {
+              const existingRef = await github.rest.git.getRef({
+                owner,
+                repo,
+                ref: refShortName
+              }).catch(() => null);
+
+              if (!existingRef) {
+                break;
+              }
+
+              console.log(`Branch ${branchName} already exists.`);
+
+              counter++;
+              const match = currentBranchBaseName.match(/_(\d+)$/);
+              if (match) {
+                currentBranchBaseName = currentBranchBaseName.replace(/_(\d+)$/, '');
+              }
+              branchName = `${currentBranchBaseName}_${String(counter).padStart(2, '0')}`;
+              refName = `refs/heads/${branchName}`;
+              refShortName = `heads/${branchName}`;
+            }
+
+            const result = await github.rest.git.createRef({
+              owner,
+              repo,
+              ref: refName,
+              sha: baseBranch.data.commit.sha
+            });
+
+            console.log(`Created branch ${branchName} with SHA ${result.data.object.sha}`);
+            console.log(`Branch URL: ${fixBranchUrl(result.data.object.url)}`);
+
+            return { ref: result.data.ref }
+
+      - name: Get issue
+        uses: actions/github-script@v7
+        id: get_issue
+        with:
+          script: |
+            console.log('Fetching issue #${{ inputs.issue-number }}')
+            const { repo, owner } = context.repo;
+            const result = await github.rest.issues.get({
+              owner,
+              repo,
+              issue_number: ${{ inputs.issue-number }}
+            });
+            console.log(`Fetched issue #${result.data.number}: ${result.data.title}`)
+
+            return { title: result.data.title, body: result.data.body, user: result.data.user.login };
+
+      - name: Create prompt
+        uses: actions/github-script@v7
+        id: create_prompt
+        with:
+          result-encoding: string
+          script: |
+            const title = `${{ fromJson(steps.get_issue.outputs.result).title }}`;
+            const body = `${{ fromJson(steps.get_issue.outputs.result).body }}`;
+
+            const titleWithSingleQuotes = title.replace(/"/g, "'").replace(/`/g, '\\`');
+            const bodyWithSingleQuotes = body.replace(/"/g, "'").replace(/`/g, '\\`');
+
+            return `
+              Here is the github issue detail user created
+              Issue title: ${titleWithSingleQuotes}
+              Issue description:
+                ${bodyWithSingleQuotes}
+            `;
+
+      - name: Create requirements.txt
+        run: echo "aider-chat" > requirements.txt
+        shell: bash
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: 'requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt
+        shell: bash
+
+      - name: Prepare Git Environment
+        run: |
+          git fetch origin
+          BRANCH_NAME=$(echo "${{ fromJson(steps.create_branch.outputs.result).ref }}" | sed 's#refs/heads/##')
+          echo "Available branches after fetch:"
+          git branch -r
+          if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME"; then
+            echo "Checking out existing branch: $BRANCH_NAME"
+            git checkout "$BRANCH_NAME"
+          else
+            echo "Branch $BRANCH_NAME not found, creating locally"
+            git checkout -b "$BRANCH_NAME" "origin/${{ inputs.base-branch }}"
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        shell: bash
+
+      - name: Aider Planning Phase
+        env:
+          ${{ inputs.api_key_env_name }}: ${{ secrets.api_key_env_value }}
+        run: |
+          aider --yes \
+            --chat-history-file .aider.chat.history.md \
+            --thinking-tokens 4k \
+            --message "/ask ${{ steps.create_prompt.outputs.result }}; \
+              DO NOT MAKE ANY CODE CHANGES, \
+              Please read necessary files and tell me the plan to address the requirement" \
+            --model ${{ inputs.model }} | tee /tmp/plan.md
+        timeout-minutes: ${{ inputs.chat-timeout }}
+        shell: bash
+
+      - name: Comment Plan to Issue
+        uses: actions/github-script@v7
+        id: comment_plan
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const fs = require('fs');
+            let plan = fs.readFileSync('/tmp/plan.md', 'utf8');
+
+            const issueNumber = ${{ inputs.issue-number }};
+            const { repo, owner } = context.repo;
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issueNumber,
+              body: `## Aider's Proposed Plan:\n\n${plan}\n\n---\nWorkflow Run: [${context.runId}](${runUrl})`
+            });
+            console.log(`Commented plan on issue #${issueNumber}`);
+
+      - name: Aider Execution Phase
+        env:
+          ${{ inputs.api_key_env_name }}: ${{ secrets.api_key_env_value }}
+        run: |
+          aider --yes --restore-chat-history \
+            --chat-history-file .aider.chat.history.md \
+            --thinking-tokens 4k \
+            --message "Based on the plan you just said, please execute the plan" \
+            --model ${{ inputs.model }}
+
+          BRANCH_NAME=$(echo "${{ fromJson(steps.create_branch.outputs.result).ref }}" | sed 's#refs/heads/##')
+          git push origin "$BRANCH_NAME"
+        timeout-minutes: ${{ inputs.chat-timeout }}
+        shell: bash
+
+      - name: Create Pull Request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { repo, owner } = context.repo;
+            const branchRef = '${{ fromJson(steps.create_branch.outputs.result).ref }}'
+            const title = '${{ fromJson(steps.get_issue.outputs.result).title }}'
+            const issueCreator = '${{ fromJson(steps.get_issue.outputs.result).user }}'
+
+            const pulls = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100
+            });
+
+            const existingPR = pulls.data.find((pr) => pr.head.ref === branchRef);
+            if (existingPR) {
+              console.log(`PR #${existingPR.number} already exists: ${existingPR.html_url}`);
+              return existingPR;
+            }
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const newPR = await github.rest.pulls.create({
+              title, owner, repo, head: branchRef,
+              base: 'refs/heads/${{ inputs.base-branch }}',
+              body: [
+                'This PR is auto-generated by Aider Workflow.',
+                '',
+                `Fixes #${{ inputs.issue-number }}`,
+                '',
+                `Workflow Run: [${context.runId}](${runUrl})`
+              ].join('\n')
+            });
+
+            if (issueCreator) {
+              try {
+                await github.rest.pulls.requestReviewers({
+                  owner,
+                  repo,
+                  pull_number: newPR.data.number,
+                  reviewers: [issueCreator]
+                });
+                console.log(`Added ${issueCreator} as a reviewer to PR #${newPR.data.number}`);
+              } catch (error) {
+                console.error(`Failed to add reviewer ${issueCreator} to PR #${newPR.data.number}: ${error.message}`);
+              }
+            } else {
+              console.log('Issue creator not found, skipping reviewer assignment.');
+            }
+            github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: newPR.data.number,
+              labels: ['automated-pr']
+            });
+
+            console.log(`Created PR #${newPR.data.number}: ${newPR.data.html_url}`);

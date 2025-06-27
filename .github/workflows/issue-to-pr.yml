@@ -215,6 +215,11 @@ jobs:
             --model ${{ inputs.model }}
 
           BRANCH_NAME=$(echo "${{ fromJson(steps.create_branch.outputs.result).ref }}" | sed 's#refs/heads/##')
+          if [ -f "plan.md" ]; then
+            rm plan.md
+            git add plan.md
+            git commit -m "Remove plan.md"
+          fi
           git push origin "$BRANCH_NAME"
         timeout-minutes: ${{ inputs.chat-timeout }}
         shell: bash

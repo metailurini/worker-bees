@@ -214,7 +214,6 @@ jobs:
         run: |
           aider --yes --restore-chat-history \
             --chat-history-file .aider.chat.history.md \
-            --thinking-tokens 4k \
             --message "Based on the plan you just said, please execute the plan" \
             --model ${{ inputs.model }}
 

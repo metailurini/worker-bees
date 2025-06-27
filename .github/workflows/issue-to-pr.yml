@@ -45,6 +45,23 @@ jobs:
         with:
           ref: ${{ inputs.base-branch }}
 
+      - name: Comment on Issue Start
+        uses: actions/github-script@v7
+        id: comment_start
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const issueNumber = ${{ inputs.issue-number }};
+            const { repo, owner } = context.repo;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issueNumber,
+              body: `The Worker Bee's currently working on this issue: [${context.runId}](${runUrl})`
+            });
+            console.log(`Commented on issue #${issueNumber} about workflow start.`);
+
       - name: Create a new branch
         uses: actions/github-script@v7
         id: create_branch
@@ -180,33 +197,12 @@ jobs:
           aider --yes \
             --chat-history-file .aider.chat.history.md \
             --thinking-tokens 4k \
-            --message "/ask ${{ steps.create_prompt.outputs.result }}; \
-              DO NOT MAKE ANY CODE CHANGES, \
-              Please read necessary files and tell me the plan to address the requirement" \
-            --model ${{ inputs.model }} | tee /tmp/plan.md
+            --message "${{ steps.create_prompt.outputs.result }}; \
+              DO NOT MAKE ANY CODE CHANGES RIGHT NOW, \
+              Please read necessary files and write down the plan to ./plan.md" \
+            --model ${{ inputs.model }}
         timeout-minutes: ${{ inputs.chat-timeout }}
         shell: bash
-
-      - name: Comment Plan to Issue
-        uses: actions/github-script@v7
-        id: comment_plan
-        with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            const fs = require('fs');
-            let plan = fs.readFileSync('/tmp/plan.md', 'utf8');
-
-            const issueNumber = ${{ inputs.issue-number }};
-            const { repo, owner } = context.repo;
-
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            await github.rest.issues.createComment({
-              owner,
-              repo,
-              issue_number: issueNumber,
-              body: `## Aider's Proposed Plan:\n\n${plan}\n\n---\nWorkflow Run: [${context.runId}](${runUrl})`
-            });
-            console.log(`Commented plan on issue #${issueNumber}`);
 
       - name: Aider Execution Phase
         env:

@@ -197,9 +197,10 @@ jobs:
           aider --yes \
             --chat-history-file .aider.chat.history.md \
             --thinking-tokens 4k \
-            --message "${{ steps.create_prompt.outputs.result }}; \
-              DO NOT MAKE ANY CODE CHANGES RIGHT NOW, \
-              Please read necessary files and write down the plan to ./plan.md" \
+            --message "Create a detailed plan for implementing the following: ${{ steps.create_prompt.outputs.result }}. \
+              DO NOT MAKE ANY CODE CHANGES. \
+              Read all necessary files, analyze the requirements, and write a detailed plan to ./plan.md. \
+              Confirm the plan is saved to ./plan.md before exiting." \
             --model ${{ inputs.model }}
         timeout-minutes: ${{ inputs.chat-timeout }}
         shell: bash

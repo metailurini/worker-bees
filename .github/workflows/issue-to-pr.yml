@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: 'gemini/gemini-2.5-flash-preview-04-17'
+      weak-model:
+        description: 'Weak model to use for planning phase'
+        required: false
+        type: string
+        default: 'gemini/gemini-2.5-flash-lite-preview-06-17'
       api_key_env_name:
         description: 'Name of the environment variable for the API key'
         required: true
@@ -205,7 +210,8 @@ jobs:
               2. Multiple modifications to a single file should be broken into separate steps. \
               3. Each step must be prefixed with 'step <number>:' (e.g., 'step 1:'). \
               Confirm the plan is saved to ./plan.md before exiting." \
-            --model ${{ inputs.model }}
+            --model ${{ inputs.model }} \
+            --weak-model ${{ inputs.weak-model }}
         timeout-minutes: ${{ inputs.chat-timeout }}
         shell: bash
 
@@ -226,7 +232,8 @@ jobs:
             aider --yes --restore-chat-history \
               --chat-history-file .aider.chat.history.md \
               --message "Based on the plan in plan.md, please execute the plan." \
-              --model ${{ inputs.model }}
+              --model ${{ inputs.model }} \
+              --weak-model ${{ inputs.weak-model }}
           else
             OLDIFS=$IFS
             IFS=$'\n' # Process each step on a new line
@@ -236,7 +243,8 @@ jobs:
               aider --yes --restore-chat-history \
                 --chat-history-file .aider.chat.history.md \
                 --message "Execute ONLY the following step from the plan: $step_description. Do not perform any other actions." \
-                --model ${{ inputs.model }}
+                --model ${{ inputs.model }} \
+                --weak-model ${{ inputs.weak-model }}
             done
             IFS=$OLDIFS
           fi

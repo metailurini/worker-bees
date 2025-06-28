@@ -200,6 +200,10 @@ jobs:
             --message "Create a detailed plan for implementing the following: ${{ steps.create_prompt.outputs.result }}. \
               DO NOT MAKE ANY CODE CHANGES. \
               Read all necessary files, analyze the requirements, and write a detailed plan to ./plan.md. \
+              The plan must follow these rules: \
+              1. Each step must be simple and modify only one file. \
+              2. Multiple modifications to a single file should be broken into separate steps. \
+              3. Each step must be prefixed with 'step (number):' (e.g., 'step 1:'). \
               Confirm the plan is saved to ./plan.md before exiting." \
             --model ${{ inputs.model }}
         timeout-minutes: ${{ inputs.chat-timeout }}
@@ -209,19 +213,57 @@ jobs:
         env:
           ${{ inputs.api_key_env_name }}: ${{ secrets.api_key_env_value }}
         run: |
-          aider --yes --restore-chat-history \
-            --chat-history-file .aider.chat.history.md \
-            --message "Based on the plan you just said, please execute the plan" \
-            --model ${{ inputs.model }}
+          if [ ! -f "plan.md" ]; then
+            echo "plan.md not found!"
+            exit 1
+          fi
+
+          # Extract steps from plan.md
+          # Each line starting with "step (number):" is considered a step
+          # The sed command extracts the description after "step (number): "
+          steps=$(grep -E "^step \([0-9]+\):" plan.md | sed -E 's/step \([0-9]+\): //')
+
+          if [ -z "$steps" ]; then
+            echo "No steps found in plan.md with the format 'step (number):'."
+            # Decide if this is an error or if we should proceed with a generic execution
+            # For now, let's try a generic execution if no specific steps are found
+            aider --yes --restore-chat-history \
+              --chat-history-file .aider.chat.history.md \
+              --message "Based on the plan in plan.md, please execute the plan." \
+              --model ${{ inputs.model }}
+          else
+            # Loop through each step and execute it
+            OLDIFS=$IFS
+            IFS=$'\n'
+            for step_description in $steps; do
+              IFS=$OLDIFS # Restore IFS for commands within the loop
+              echo "Executing step: $step_description"
+              # It's important to escape quotes in the step_description if it's passed directly in a JSON-like string
+              # However, aider messages are usually fine with plain text.
+              # Ensure the message clearly states to ONLY perform this specific step.
+              aider --yes --restore-chat-history \
+                --chat-history-file .aider.chat.history.md \
+                --message "Execute ONLY the following step from the plan: $step_description. Do not perform any other actions." \
+                --model ${{ inputs.model }}
+            done
+            IFS=$OLDIFS
+          fi
 
           BRANCH_NAME=$(echo "${{ fromJson(steps.create_branch.outputs.result).ref }}" | sed 's#refs/heads/##')
+          # Remove plan.md after execution
           if [ -f "plan.md" ]; then
+            echo "Removing plan.md"
             rm plan.md
-            git add plan.md
-            git commit -m "Remove plan.md"
+            # Check if plan.md was tracked before trying to git add/commit its removal
+            if git ls-files --error-unmatch plan.md > /dev/null 2>&1; then
+              git add plan.md
+              git commit -m "Remove plan.md after execution"
+            else
+              echo "plan.md was not tracked by git."
+            fi
           fi
           git push origin "$BRANCH_NAME"
-        timeout-minutes: ${{ inputs.chat-timeout }}
+        timeout-minutes: ${{ inputs.chat-timeout }} # This timeout applies to the entire script execution
         shell: bash
 
       - name: Create Pull Request

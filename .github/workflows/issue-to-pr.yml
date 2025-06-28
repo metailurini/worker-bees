@@ -218,29 +218,21 @@ jobs:
             exit 1
           fi
 
-          # Extract steps from plan.md
-          # Each line starting with "step <number>:" is considered a step
-          # The sed command extracts the description after "step <number>: "
+          # Extract steps from plan.md, expecting "step <number>: description"
           steps=$(grep -E "^step [0-9]+:" plan.md | sed -E 's/step [0-9]+: //')
 
           if [ -z "$steps" ]; then
-            echo "No steps found in plan.md with the format 'step <number>:'. Attempting generic execution."
-            # Decide if this is an error or if we should proceed with a generic execution
-            # For now, let's try a generic execution if no specific steps are found
+            echo "No specific steps found in plan.md with the format 'step <number>:'. Attempting generic execution of the entire plan."
             aider --yes --restore-chat-history \
               --chat-history-file .aider.chat.history.md \
               --message "Based on the plan in plan.md, please execute the plan." \
               --model ${{ inputs.model }}
           else
-            # Loop through each step and execute it
             OLDIFS=$IFS
-            IFS=$'\n'
+            IFS=$'\n' # Process each step on a new line
             for step_description in $steps; do
-              IFS=$OLDIFS # Restore IFS for commands within the loop
+              IFS=$OLDIFS
               echo "Executing step: $step_description"
-              # It's important to escape quotes in the step_description if it's passed directly in a JSON-like string
-              # However, aider messages are usually fine with plain text.
-              # Ensure the message clearly states to ONLY perform this specific step.
               aider --yes --restore-chat-history \
                 --chat-history-file .aider.chat.history.md \
                 --message "Execute ONLY the following step from the plan: $step_description. Do not perform any other actions." \
@@ -250,16 +242,15 @@ jobs:
           fi
 
           BRANCH_NAME=$(echo "${{ fromJson(steps.create_branch.outputs.result).ref }}" | sed 's#refs/heads/##')
-          # Remove plan.md after execution
           if [ -f "plan.md" ]; then
             echo "Removing plan.md"
             rm plan.md
-            # Check if plan.md was tracked before trying to git add/commit its removal
+            # Only attempt to git add/commit plan.md if it was previously tracked
             if git ls-files --error-unmatch plan.md > /dev/null 2>&1; then
               git add plan.md
               git commit -m "Remove plan.md after execution"
             else
-              echo "plan.md was not tracked by git."
+              echo "plan.md was not tracked by git, so no need to commit its removal."
             fi
           fi
           git push origin "$BRANCH_NAME"

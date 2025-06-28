@@ -209,6 +209,7 @@ jobs:
               1. Each step must be simple and modify only one file. \
               2. Multiple modifications to a single file should be broken into separate steps. \
               3. Each step must be prefixed with 'step <number>:' (e.g., 'step 1:'). \
+              4. Organize changes to ensure the number of steps is less than 10. \
               Confirm the plan is saved to ./plan.md before exiting." \
             --model ${{ inputs.model }} \
             --weak-model ${{ inputs.weak-model }}
@@ -234,6 +235,7 @@ jobs:
               --message "Based on the plan in plan.md, please execute the plan." \
               --model ${{ inputs.model }} \
               --weak-model ${{ inputs.weak-model }}
+            sleep 1
           else
             OLDIFS=$IFS
             IFS=$'\n' # Process each step on a new line
@@ -245,6 +247,7 @@ jobs:
                 --message "Execute ONLY the following step from the plan: $step_description. Do not perform any other actions." \
                 --model ${{ inputs.model }} \
                 --weak-model ${{ inputs.weak-model }}
+              sleep 1
             done
             IFS=$OLDIFS
           fi

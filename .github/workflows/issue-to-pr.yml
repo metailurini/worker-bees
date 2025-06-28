@@ -203,7 +203,7 @@ jobs:
               The plan must follow these rules: \
               1. Each step must be simple and modify only one file. \
               2. Multiple modifications to a single file should be broken into separate steps. \
-              3. Each step must be prefixed with 'step (number):' (e.g., 'step 1:'). \
+              3. Each step must be prefixed with 'step <number>:' (e.g., 'step 1:'). \
               Confirm the plan is saved to ./plan.md before exiting." \
             --model ${{ inputs.model }}
         timeout-minutes: ${{ inputs.chat-timeout }}
@@ -219,12 +219,12 @@ jobs:
           fi
 
           # Extract steps from plan.md
-          # Each line starting with "step (number):" is considered a step
-          # The sed command extracts the description after "step (number): "
-          steps=$(grep -E "^step \([0-9]+\):" plan.md | sed -E 's/step \([0-9]+\): //')
+          # Each line starting with "step <number>:" is considered a step
+          # The sed command extracts the description after "step <number>: "
+          steps=$(grep -E "^step [0-9]+:" plan.md | sed -E 's/step [0-9]+: //')
 
           if [ -z "$steps" ]; then
-            echo "No steps found in plan.md with the format 'step (number):'."
+            echo "No steps found in plan.md with the format 'step <number>:'. Attempting generic execution."
             # Decide if this is an error or if we should proceed with a generic execution
             # For now, let's try a generic execution if no specific steps are found
             aider --yes --restore-chat-history \

@@ -211,7 +211,7 @@ jobs:
               3. Organize changes to ensure the number of steps is less than 10. \
               Confirm the plan is saved to ./plan.md before exiting." \
             --model ${{ inputs.model }} \
-            --weak-model ${{ inputs.weak-model }}
+            --weak-model ${{ inputs.weak-model }} ./plan.md
         timeout-minutes: ${{ inputs.chat-timeout }}
         shell: bash
 
@@ -219,11 +219,6 @@ jobs:
         env:
           ${{ inputs.api_key_env_name }}: ${{ secrets.api_key_env_value }}
         run: |
-          if [ ! -f "plan.md" ]; then
-            echo "plan.md not found!"
-            exit 1
-          fi
-
           # Extract steps from plan.md, expecting "step <number>: description"
           steps=$(grep -E "^step [0-9]+:" plan.md | sed -E 's/step [0-9]+: //')
 

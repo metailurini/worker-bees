@@ -5,16 +5,16 @@ name: Issue to PR workflow
 on:
   workflow_call:
     inputs:
-      base-branch:
+      base_branch:
         description: 'Base branch to create PR against'
         required: true
         type: string
-      chat-timeout:
+      chat_timeout:
         description: 'Timeout for chat in minutes to prevent burning your credits'
         required: false
         type: number
         default: 10
-      issue-number:
+      issue_number:
         description: 'Issue number'
         required: true
         type: number
@@ -23,7 +23,7 @@ on:
         required: false
         type: string
         default: 'gemini/gemini-2.5-flash-preview-04-17'
-      weak-model:
+      weak_model:
         description: 'Weak model to use for planning phase'
         required: false
         type: string
@@ -61,7 +61,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.base-branch }}
+          ref: ${{ inputs.base_branch }}
 
       - name: Comment on Issue Start
         uses: actions/github-script@v7
@@ -69,7 +69,7 @@ jobs:
         with:
           github-token: ${{ secrets.custom_github_token }}
           script: |
-            const issueNumber = ${{ inputs.issue-number }};
+            const issueNumber = ${{ inputs.issue_number }};
             const { repo, owner } = context.repo;
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             await github.rest.issues.createComment({
@@ -95,11 +95,11 @@ jobs:
             const baseBranch = await github.rest.repos.getBranch({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              branch: '${{ inputs.base-branch }}'
+              branch: '${{ inputs.base_branch }}'
             });
 
             const { repo, owner } = context.repo;
-            let branchName = 'feature/aider-' + kebabCase(context.payload.issue.title || 'issue-${{ inputs.issue-number }}');
+            let branchName = 'feature/aider-' + kebabCase(context.payload.issue.title || 'issue-${{ inputs.issue_number }}');
             let refName = `refs/heads/${branchName}`
             let refShortName = `heads/${branchName}`
 
@@ -146,12 +146,12 @@ jobs:
         id: get_issue
         with:
           script: |
-            console.log('Fetching issue #${{ inputs.issue-number }}')
+            console.log('Fetching issue #${{ inputs.issue_number }}')
             const { repo, owner } = context.repo;
             const result = await github.rest.issues.get({
               owner,
               repo,
-              issue_number: ${{ inputs.issue-number }}
+              issue_number: ${{ inputs.issue_number }}
             });
             console.log(`Fetched issue #${result.data.number}: ${result.data.title}`)
 
@@ -203,7 +203,7 @@ jobs:
             git checkout "$BRANCH_NAME"
           else
             echo "Branch $BRANCH_NAME not found, creating locally"
-            git checkout -b "$BRANCH_NAME" "origin/${{ inputs.base-branch }}"
+            git checkout -b "$BRANCH_NAME" "origin/${{ inputs.base_branch }}"
           fi
           git config user.name '${{ inputs.git_user_name }}'
           git config user.email "${{ inputs.git_user_email }}"
@@ -226,8 +226,8 @@ jobs:
               3. Organize changes to ensure the number of steps is less than 10. \
               Confirm the plan is saved to ./plan.md before exiting." \
             --model ${{ inputs.model }} \
-            --weak-model ${{ inputs.weak-model }} ./plan.md
-        timeout-minutes: ${{ inputs.chat-timeout }}
+            --weak_model ${{ inputs.weak_model }} ./plan.md
+        timeout-minutes: ${{ inputs.chat_timeout }}
         shell: bash
 
       - name: Aider Execution Phase
@@ -243,7 +243,7 @@ jobs:
               --chat-history-file .aider.chat.history.md \
               --message "Based on the plan in plan.md, please execute the plan." \
               --model ${{ inputs.model }} \
-              --weak-model ${{ inputs.weak-model }} ./plan.md
+              --weak_model ${{ inputs.weak_model }} ./plan.md
             sleep 1
           else
             OLDIFS=$IFS
@@ -255,7 +255,7 @@ jobs:
                 --chat-history-file .aider.chat.history.md \
                 --message "Execute ONLY the following step from the plan: $step_description. Do not perform any other actions." \
                 --model ${{ inputs.model }} \
-                --weak-model ${{ inputs.weak-model }} ./plan.md
+                --weak_model ${{ inputs.weak_model }} ./plan.md
               sleep 1
             done
             IFS=$OLDIFS
@@ -274,7 +274,7 @@ jobs:
           fi
           BRANCH_NAME=$(echo "${{ fromJson(steps.create_branch.outputs.result).ref }}" | sed 's#refs/heads/##')
           git push origin "$BRANCH_NAME"
-        timeout-minutes: ${{ inputs.chat-timeout }} # This timeout applies to the entire script execution
+        timeout-minutes: ${{ inputs.chat_timeout }} # This timeout applies to the entire script execution
         shell: bash
 
       - name: Create Pull Request
@@ -303,11 +303,11 @@ jobs:
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const newPR = await github.rest.pulls.create({
               title, owner, repo, head: branchRef,
-              base: 'refs/heads/${{ inputs.base-branch }}',
+              base: 'refs/heads/${{ inputs.base_branch }}',
               body: [
                 'This PR is auto-generated by Aider Workflow.',
                 '',
-                `Fixes #${{ inputs.issue-number }}`,
+                `Fixes #${{ inputs.issue_number }}`,
                 '',
                 `Workflow Run: [${context.runId}](${runUrl})`
               ].join('\n')

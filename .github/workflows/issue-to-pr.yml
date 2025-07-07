@@ -261,7 +261,6 @@ jobs:
             IFS=$OLDIFS
           fi
 
-          BRANCH_NAME=$(echo "${{ fromJson(steps.create_branch.outputs.result).ref }}" | sed 's#refs/heads/##')
           if [ -f "plan.md" ]; then
             echo "Removing plan.md"
             rm plan.md
@@ -273,6 +272,7 @@ jobs:
               echo "plan.md was not tracked by git, so no need to commit its removal."
             fi
           fi
+          BRANCH_NAME=$(echo "${{ fromJson(steps.create_branch.outputs.result).ref }}" | sed 's#refs/heads/##')
           git push origin "$BRANCH_NAME"
         timeout-minutes: ${{ inputs.chat-timeout }} # This timeout applies to the entire script execution
         shell: bash

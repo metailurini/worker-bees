@@ -214,11 +214,11 @@ jobs:
           ${{ inputs.api_key_env_name }}: ${{ secrets.api_key_env_value }}
         run: |
           aider --yes \
-            --chat-history-file .aider.chat.history.md \
+            --chat-history-file /tmp/.aider.chat.history.md \
             --thinking-tokens 4k \
-            --message "Create a detailed plan for implementing the following: ${{ steps.create_prompt.outputs.result }}. \
+            --message "Include the following GitHub issue details at the beginning of ./plan.md: ${{ steps.create_prompt.outputs.result }}. Then, create a detailed plan for implementing the requirements described in the issue. \
               DO NOT MAKE ANY CODE CHANGES. \
-              Read all necessary files, analyze the requirements, and write a detailed plan to ./plan.md. \
+              Read all necessary files, analyze the requirements, and write the detailed plan to ./plan.md. \
               The plan must follow these rules: \
               1. Each step must modify only one file. \
               2. Each step must be prefixed with 'step <number>:' (e.g., 'step 1:'). \
@@ -242,7 +242,7 @@ jobs:
               --chat-history-file .aider.chat.history.md \
               --message "Based on the plan in plan.md, please execute the plan." \
               --model ${{ inputs.model }} \
-              --weak-model ${{ inputs.weak-model }}
+              --weak-model ${{ inputs.weak-model }} ./plan.md
             sleep 1
           else
             OLDIFS=$IFS
@@ -254,7 +254,7 @@ jobs:
                 --chat-history-file .aider.chat.history.md \
                 --message "Execute ONLY the following step from the plan: $step_description. Do not perform any other actions." \
                 --model ${{ inputs.model }} \
-                --weak-model ${{ inputs.weak-model }}
+                --weak-model ${{ inputs.weak-model }} ./plan.md
               sleep 1
             done
             IFS=$OLDIFS

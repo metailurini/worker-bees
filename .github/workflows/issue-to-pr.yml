@@ -226,7 +226,7 @@ jobs:
               3. Organize changes to ensure the number of steps is less than 10. \
               Confirm the plan is saved to ./plan.md before exiting." \
             --model ${{ inputs.model }} \
-            --weak_model ${{ inputs.weak_model }} ./plan.md
+            --weak-model ${{ inputs.weak_model }} ./plan.md
         timeout-minutes: ${{ inputs.chat_timeout }}
         shell: bash
 
@@ -243,7 +243,7 @@ jobs:
               --chat-history-file .aider.chat.history.md \
               --message "Based on the plan in plan.md, please execute the plan." \
               --model ${{ inputs.model }} \
-              --weak_model ${{ inputs.weak_model }} ./plan.md
+              --weak-model ${{ inputs.weak_model }} ./plan.md
             sleep 1
           else
             OLDIFS=$IFS
@@ -255,7 +255,7 @@ jobs:
                 --chat-history-file .aider.chat.history.md \
                 --message "Execute ONLY the following step from the plan: $step_description. Do not perform any other actions." \
                 --model ${{ inputs.model }} \
-                --weak_model ${{ inputs.weak_model }} ./plan.md
+                --weak-model ${{ inputs.weak_model }} ./plan.md
               sleep 1
             done
             IFS=$OLDIFS

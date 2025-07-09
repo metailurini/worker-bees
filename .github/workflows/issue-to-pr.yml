@@ -293,7 +293,7 @@ jobs:
       - name: Check Aider Reflection Limit
         id: check_reflection_limit
         run: |
-          if [ -f /tmp/.aider.chat.history.md ] && grep -q "Only 3 reflections allowed, stopping." /tmp/.aider.chat.history.md; then
+          if [ -f .aider.chat.history.md ] && grep -q "Only 3 reflections allowed" .aider.chat.history.md; then
             echo "reflection_limit_reached=true" >> $GITHUB_OUTPUT
           else
             echo "reflection_limit_reached=false" >> $GITHUB_OUTPUT

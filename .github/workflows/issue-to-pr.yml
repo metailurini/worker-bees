@@ -155,7 +155,11 @@ jobs:
             });
             console.log(`Fetched issue #${result.data.number}: ${result.data.title}`)
 
-            return { title: btoa(result.data.title), body: btoa(result.data.body), user: result.data.user.login };
+            return {
+              title: Buffer.from(result.data.title, 'utf8').toString('base64'),
+              body: Buffer.from(result.data.body, 'utf8').toString('base64'),
+              user: result.data.user.login
+            };
 
       - name: Create prompt
         uses: actions/github-script@v7
@@ -163,8 +167,8 @@ jobs:
         with:
           result-encoding: string
           script: |
-            const title = atob(`${{ fromJson(steps.get_issue.outputs.result).title }}`);
-            const body = atob(`${{ fromJson(steps.get_issue.outputs.result).body }}`);
+            const title = Buffer.from(`${{ fromJson(steps.get_issue.outputs.result).title }}`, 'base64').toString('utf8');
+            const body = Buffer.from(`${{ fromJson(steps.get_issue.outputs.result).body }}`, 'base64').toString('utf8');
 
             const titleWithSingleQuotes = title.replace(/"/g, "'").replace(/`/g, '\\`');
             const bodyWithSingleQuotes = body.replace(/"/g, "'").replace(/`/g, '\\`');
@@ -307,9 +311,9 @@ jobs:
           script: |
             const { repo, owner } = context.repo;
             const branchRef = '${{ fromJson(steps.create_branch.outputs.result).ref }}'
-            const title = atob('${{ fromJson(steps.get_issue.outputs.result).title }}')
+            const title = Buffer.from('${{ fromJson(steps.get_issue.outputs.result).title }}', 'base64').toString('utf8')
             const issueCreator = '${{ fromJson(steps.get_issue.outputs.result).user }}'
-            const planContent = atob(`${{ steps.get_plan.outputs.plan_content }}`);
+            const planContent = Buffer.from(`${{ steps.get_plan.outputs.plan_content }}`, 'base64').toString('utf8');
             const reflectionLimitReached = `${{ steps.check_reflection_limit.outputs.reflection_limit_reached == 'true' }}`;
 
             const pulls = await github.rest.pulls.list({
